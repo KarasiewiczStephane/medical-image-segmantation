@@ -1,4 +1,4 @@
-.PHONY: install test lint clean run docker
+.PHONY: install test lint clean run dashboard docker docker-compose
 
 install:
 	pip install -r requirements.txt
@@ -17,6 +17,12 @@ clean:
 run:
 	python -m src.main
 
+dashboard:
+	streamlit run src/dashboard/app.py --server.port=8501
+
 docker:
 	docker build -t $(shell basename $(CURDIR)) .
-	docker run -p 8000:8000 $(shell basename $(CURDIR))
+	docker run -p 8501:8501 $(shell basename $(CURDIR))
+
+docker-compose:
+	docker compose up --build
