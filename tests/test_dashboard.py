@@ -1,24 +1,26 @@
 """Tests for the Streamlit dashboard application."""
 
+import zipfile
+from io import BytesIO
 from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
+from PIL import Image
 
 from src.dashboard.app import (
     SUPPORTED_FORMATS,
     _preprocess_standard,
+    create_batch_zip,
+    mask_to_png_bytes,
     preprocess_uploaded_image,
+    process_batch,
     run_segmentation,
 )
 
 
 def _create_test_png_bytes(h: int = 64, w: int = 64) -> bytes:
     """Create test PNG image bytes."""
-    from io import BytesIO
-
-    from PIL import Image
-
     img = Image.fromarray(np.random.randint(0, 255, (h, w, 3), dtype=np.uint8))
     buf = BytesIO()
     img.save(buf, format="PNG")
@@ -27,10 +29,6 @@ def _create_test_png_bytes(h: int = 64, w: int = 64) -> bytes:
 
 def _create_test_jpg_bytes(h: int = 64, w: int = 64) -> bytes:
     """Create test JPEG image bytes."""
-    from io import BytesIO
-
-    from PIL import Image
-
     img = Image.fromarray(np.random.randint(0, 255, (h, w, 3), dtype=np.uint8))
     buf = BytesIO()
     img.save(buf, format="JPEG")
@@ -154,3 +152,79 @@ class TestRunSegmentation:
         result_high = run_segmentation(mock_model, image, threshold=0.9)
 
         assert result_low["binary_mask"].sum() >= result_high["binary_mask"].sum()
+
+
+class TestMaskToPngBytes:
+    """Tests for mask_to_png_bytes function."""
+
+    def test_returns_valid_png(self) -> None:
+        """Return valid PNG bytes from a mask."""
+        mask = np.random.randint(0, 2, (32, 32)).astype(np.float32)
+        png_bytes = mask_to_png_bytes(mask)
+        assert isinstance(png_bytes, bytes)
+        assert len(png_bytes) > 0
+        # Verify it's valid PNG
+        img = Image.open(BytesIO(png_bytes))
+        assert img.size == (32, 32)
+
+    def test_binary_mask_values(self) -> None:
+        """PNG from all-ones mask should be white."""
+        mask = np.ones((16, 16), dtype=np.float32)
+        png_bytes = mask_to_png_bytes(mask)
+        img = Image.open(BytesIO(png_bytes))
+        arr = np.array(img)
+        assert arr.max() == 255
+
+
+class TestCreateBatchZip:
+    """Tests for create_batch_zip function."""
+
+    def test_creates_valid_zip(self) -> None:
+        """Create a ZIP with mask files."""
+        results = [
+            {"filename": "img1.png", "mask": np.ones((32, 32), dtype=np.float32)},
+            {"filename": "img2.jpg", "mask": np.zeros((32, 32), dtype=np.float32)},
+        ]
+        zip_bytes = create_batch_zip(results)
+        assert isinstance(zip_bytes, bytes)
+
+        with zipfile.ZipFile(BytesIO(zip_bytes)) as zf:
+            names = zf.namelist()
+            assert "img1_mask.png" in names
+            assert "img2_mask.png" in names
+            assert len(names) == 2
+
+
+class TestProcessBatch:
+    """Tests for process_batch function."""
+
+    def test_batch_processing(self) -> None:
+        """Process a batch of mock files."""
+        mock_model = MagicMock()
+        mock_model.predict.return_value = np.random.rand(1, 32, 32, 1).astype(
+            np.float32
+        )
+
+        mock_file = MagicMock()
+        mock_file.read.return_value = _create_test_png_bytes(32, 32)
+        mock_file.name = "test.png"
+
+        results = process_batch(mock_model, [mock_file], target_size=32, threshold=0.5)
+        assert len(results) == 1
+        assert "mask" in results[0]
+        assert results[0]["filename"] == "test.png"
+
+    def test_batch_handles_errors(self) -> None:
+        """Handle failing files in batch."""
+        mock_model = MagicMock()
+        mock_model.predict.return_value = np.random.rand(1, 32, 32, 1).astype(
+            np.float32
+        )
+
+        mock_file = MagicMock()
+        mock_file.read.side_effect = Exception("read error")
+        mock_file.name = "bad.png"
+
+        results = process_batch(mock_model, [mock_file], target_size=32, threshold=0.5)
+        assert len(results) == 1
+        assert "error" in results[0]
