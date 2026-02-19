@@ -1,0 +1,107 @@
+# Medical Image Segmentation Configuration
+
+project:
+  name: "medical-image-segmentation"
+  seed: 42
+
+paths:
+  data_dir: "data"
+  raw_dir: "data/raw"
+  processed_dir: "data/processed"
+  sample_dir: "data/sample"
+  tfrecord_dir: "data/tfrecords"
+  model_dir: "models"
+  checkpoint_dir: "models/checkpoints"
+  export_dir: "models/export"
+  log_dir: "logs"
+  output_dir: "outputs"
+
+data:
+  image_size: 256
+  num_channels: 3
+  num_classes: 1
+  train_split: 0.70
+  val_split: 0.15
+  test_split: 0.15
+  batch_size: 16
+  shuffle_buffer: 1000
+  prefetch_buffer: 4
+
+augmentation:
+  enabled: true
+  rotation_limit: 30
+  horizontal_flip: true
+  vertical_flip: true
+  elastic_transform:
+    alpha: 120
+    sigma: 6
+  grid_distortion:
+    num_steps: 5
+    distort_limit: 0.3
+  brightness_contrast:
+    brightness_limit: 0.2
+    contrast_limit: 0.2
+  random_crop:
+    min_scale: 0.8
+    max_scale: 1.0
+
+model:
+  architecture: "unet"
+  encoder_channels: [64, 128, 256, 512]
+  bottleneck_channels: 1024
+  dropout_rate: 0.5
+  activation: "relu"
+  output_activation: "sigmoid"
+  use_batch_norm: true
+
+training:
+  epochs: 100
+  learning_rate: 0.001
+  loss_weights:
+    dice: 0.5
+    bce: 0.5
+  early_stopping:
+    patience: 15
+    min_delta: 0.001
+    monitor: "val_dice_coefficient"
+  reduce_lr:
+    factor: 0.5
+    patience: 7
+    min_lr: 0.000001
+    monitor: "val_dice_coefficient"
+
+evaluation:
+  mc_dropout_passes: 20
+  confidence_threshold: 0.5
+  metrics:
+    - "dice_coefficient"
+    - "iou"
+    - "pixel_accuracy"
+    - "sensitivity"
+    - "specificity"
+  confidence_interval: 0.95
+
+export:
+  onnx:
+    opset_version: 13
+    optimize: true
+  quantization:
+    enabled: false
+    method: "dynamic"
+
+dashboard:
+  host: "0.0.0.0"
+  port: 8501
+  title: "Medical Image Segmentation"
+  max_upload_size_mb: 200
+
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file_logging: true
+  log_file: "logs/app.log"
+
+isic:
+  api_base_url: "https://isic-archive.com/api/v2"
+  download_limit: 100
+  image_format: "jpg"
