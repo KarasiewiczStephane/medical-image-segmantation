@@ -38,7 +38,10 @@ def get_image_list(
 
     response = requests.get(url, params=params, timeout=30)
     response.raise_for_status()
-    images = response.json()
+    data = response.json()
+
+    # v2 API wraps results in a paginated envelope
+    images = data.get("results", data) if isinstance(data, dict) else data
 
     logger.info("Retrieved %d image records", len(images))
     return images
@@ -102,11 +105,18 @@ def download_image_and_mask(
         logger.warning("Image metadata missing isic_id, skipping")
         return None, None
 
-    image_url = f"{api_base_url}/images/{isic_id}/thumbnail"
-    mask_url = f"{api_base_url}/segmentations/{isic_id}/thumbnail"
+    # v2 API: file URLs are in the metadata; fall back to S3 direct paths
+    files = image_meta.get("files", {})
+    if files and "thumbnail_256" in files:
+        image_url = files["thumbnail_256"].get("url", "")
+    else:
+        image_url = (
+            f"https://isic-archive.s3.amazonaws.com/thumbnails/"
+            f"{isic_id}_thumbnail.jpg"
+        )
 
+    # v2 API does not expose segmentation masks; download image only
     image_path = images_dir / f"{isic_id}.jpg"
-    mask_path = masks_dir / f"{isic_id}_mask.png"
 
     try:
         image_path = download_file(image_url, image_path)
@@ -114,13 +124,7 @@ def download_image_and_mask(
         logger.error("Failed to download image %s: %s", isic_id, e)
         return None, None
 
-    try:
-        mask_path = download_file(mask_url, mask_path)
-    except requests.RequestException as e:
-        logger.warning("Failed to download mask for %s: %s", isic_id, e)
-        return image_path, None
-
-    return image_path, mask_path
+    return image_path, None
 
 
 def download_dataset(
@@ -163,9 +167,14 @@ def download_dataset(
         img_path, msk_path = download_image_and_mask(
             image_meta, images_dir, masks_dir, api_base_url
         )
-        if img_path is not None and msk_path is not None:
+        if img_path is not None:
             image_paths.append(img_path)
+        if msk_path is not None:
             mask_paths.append(msk_path)
 
-    logger.info("Download complete: %d image-mask pairs saved", len(image_paths))
+    logger.info(
+        "Download complete: %d images, %d masks saved",
+        len(image_paths),
+        len(mask_paths),
+    )
     return image_paths, mask_paths

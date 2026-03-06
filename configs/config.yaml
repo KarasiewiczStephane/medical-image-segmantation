@@ -102,6 +102,6 @@ logging:
   log_file: "logs/app.log"
 
 isic:
-  api_base_url: "https://isic-archive.com/api/v2"
+  api_base_url: "https://api.isic-archive.com/api/v2"
   download_limit: 100
   image_format: "jpg"

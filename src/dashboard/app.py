@@ -8,9 +8,12 @@ Supports batch processing and mask export.
 
 import io
 import logging
+import sys
 import zipfile
 from pathlib import Path
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import cv2
 import numpy as np
@@ -303,6 +306,31 @@ def create_streamlit_app() -> None:
             type=SUPPORTED_FORMATS,
             help="Supported formats: JPEG, PNG, DICOM",
         )
+
+        # Offer sample images from data/raw/images/ if available
+        if uploaded_file is None:
+            sample_dir = (
+                Path(get_nested(config, "paths", "raw_dir", default="data/raw"))
+                / "images"
+            )
+            sample_images = (
+                sorted(sample_dir.glob("*.jpg")) + sorted(sample_dir.glob("*.png"))
+                if sample_dir.exists()
+                else []
+            )
+
+            if sample_images:
+                st.markdown("**Or pick a sample image:**")
+                selected = st.selectbox(
+                    "Sample images",
+                    options=["— Select —"] + [p.name for p in sample_images],
+                    label_visibility="collapsed",
+                )
+                if selected != "— Select —":
+                    sample_path = sample_dir / selected
+                    uploaded_file = io.BytesIO(sample_path.read_bytes())
+                    uploaded_file.name = selected  # type: ignore[attr-defined]
+
         if uploaded_file is not None:
             _process_single_upload(
                 st,

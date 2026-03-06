@@ -16,8 +16,10 @@ htmlcov/
 
 # Data (large files)
 data/raw/
+data/tfrecords/
 *.csv
 *.parquet
+*.tfrecord
 !data/sample/
 
 # Models
@@ -25,6 +27,7 @@ data/raw/
 *.joblib
 *.pt
 *.h5
+*.keras
 *.onnx
 
 # IDE
