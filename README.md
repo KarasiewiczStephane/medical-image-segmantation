@@ -64,21 +64,40 @@ End-to-end skin lesion segmentation system using a U-Net architecture trained on
 
 All metrics are computed per-sample and aggregated with 95% confidence intervals using the t-distribution.
 
-## Setup
+## Quick Start
 
 ```bash
 # Clone
 git clone git@github.com:KarasiewiczStephane/medical-image-segmantation.git
 cd medical-image-segmantation
 
-# Install
-pip install -r requirements.txt
+# Install dependencies
+make install
 
-# Run tests
-make test
+# Download ISIC skin lesion images (default: 100 images)
+python -m src.main download
+# Or limit the number of images:
+python -m src.main download --limit 20
+
+# Train the U-Net model (generates synthetic masks if none exist)
+python -m src.main train
+# Or explicitly use synthetic masks for a quick demo:
+python -m src.main train --demo
+
+# Launch the Streamlit dashboard
+make dashboard
+# Opens at http://localhost:8501
 ```
 
 ## Usage
+
+### Data Download
+
+```bash
+python -m src.main download --limit 50
+```
+
+Downloads images from the ISIC Archive API to `data/raw/images/`. The download limit defaults to 100 and can be changed in `configs/config.yaml` under `isic.download_limit`.
 
 ### Training
 
@@ -86,23 +105,7 @@ make test
 python -m src.main train
 ```
 
-Trains U-Net with combined Dice+BCE loss, early stopping (patience=15), and ReduceLROnPlateau scheduling.
-
-### Evaluation
-
-```bash
-python -m src.main evaluate
-```
-
-Computes segmentation metrics on the test set with confidence intervals.
-
-### ONNX Export
-
-```bash
-python -m src.main export
-```
-
-Exports the trained model to ONNX format with optional quantization and inference benchmarking.
+Trains U-Net with combined Dice+BCE loss, early stopping (patience=15), and ReduceLROnPlateau scheduling. If no segmentation masks are present in `data/raw/masks/`, synthetic elliptical masks are generated automatically. Use `--epochs N` to override the epoch count.
 
 ### Dashboard
 
@@ -110,9 +113,11 @@ Exports the trained model to ONNX format with optional quantization and inferenc
 make dashboard
 ```
 
-Launches the Streamlit web interface at `http://localhost:8501` with:
+Launches the Streamlit web interface at `http://localhost:8501`. Requires a trained model at `models/checkpoints/best_model.keras`. Features:
+
 - Single image and batch processing modes
 - DICOM, JPEG, and PNG support
+- Sample image picker from downloaded data
 - Adjustable confidence threshold
 - MC Dropout uncertainty visualization
 - Grad-CAM interpretability overlay
@@ -121,11 +126,18 @@ Launches the Streamlit web interface at `http://localhost:8501` with:
 ### Docker
 
 ```bash
-# Single container
+# Single container (serves the dashboard on port 8501)
 make docker
 
-# Docker Compose
+# Docker Compose (mounts configs, models, and data as read-only volumes)
 make docker-compose
+```
+
+### Tests
+
+```bash
+make test    # pytest with coverage
+make lint    # ruff check + format
 ```
 
 ## Project Structure
